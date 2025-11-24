@@ -3,543 +3,468 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kemahiran Pemulihan: Masa dan Kalendar (Pembelajaran)</title>
+  <title>Kemahiran Pemulihan: Masa & Kalendar</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
   <style>
-    body { box-sizing: border-box; }
-    .activity-card { min-height: 400px; }
-    /* Pastikan .schedule-item juga ada transition */
-    .number-card, .activity-item, .date-cell, .schedule-item { transition: all .3s ease; cursor: pointer; }
-    .number-card:hover, .activity-item:hover, .date-cell:hover:not(.date-empty) { transform: scale(1.05); }
-    /* Hover untuk baris jadual di Aktiviti 2 */
-    .schedule-item-clickable:hover { 
-      transform: translateX(5px);
-      background-color: #f9fafb; /* bg-gray-50 */
-    }
-    .dragging { opacity: .5; transform: rotate(5deg); }
-
-    /* Drop zone */
-    .drop-zone {
-      border: 2px dashed #cbd5e1;
-      transition: all .3s ease;
-      min-width: 60px;
-      min-height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .drop-zone.drag-over { border-color: #3b82f6; background-color: #eff6ff; }
-
-    /* Salah */
-    @keyframes shake {
-      0% { transform: translateX(0); } 25% { transform: translateX(-5px); }
-      50% { transform: translateX(5px); } 75% { transform: translateX(-5px); }
-      100% { transform: translateX(0); }
-    }
-    .shake { animation: shake 0.5s ease; }
-
-    /* Zon sudah diisi */
-    .drop-zone-filled {
-      border-style: solid;
-      border-color: #4ade80;
-      background-color: #f0fdf4;
+    /* --- UI STYLE (MASTER REFERENCE - TEMA HIJAU) --- */
+    body { 
+        font-family: 'Fredoka', sans-serif; 
+        background-color: #f0fdf4; 
+        background-image: radial-gradient(#86efac 2px, transparent 2px); 
+        background-size: 30px 30px; 
     }
     
-    /* Gaya untuk aktiviti kalendar & jam */
-    /* Highlight kuning untuk Aktiviti 1 (Baharu) */
-    .schedule-item-display.highlight { 
-        background-color: #fef9c3; /* bg-yellow-100 */
-        border-color: #facc15; /* border-yellow-400 */
+    .game-card { 
+        background: white; 
+        border: 4px solid #475569; 
+        box-shadow: 8px 8px 0px #00000020; 
+        border-radius: 1.5rem; 
+        min-height: 600px; 
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+    
+    /* Buttons */
+    .btn-3d { 
+        transition: all 0.1s; 
+        border-bottom-width: 6px; 
+        border-color: rgba(0,0,0,0.2); 
+        transform: translateY(0); 
+        cursor: pointer; 
+        display: inline-block; 
+    }
+    .btn-3d:active:not(:disabled) { transform: translateY(4px); border-bottom-width: 2px; box-shadow: none; }
+    .btn-3d:disabled { opacity: 0.6; cursor: not-allowed; border-bottom-width: 6px; filter: grayscale(100%); }
+
+    /* Animation */
+    .shake { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; background-color: #fee2e2 !important; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px) rotate(-5deg); } 75% { transform: translateX(8px) rotate(5deg); } }
+
+    /* --- STYLE KHUSUS MASA & KALENDAR --- */
+    
+    /* Drag & Drop Generic */
+    .draggable { cursor: grab; user-select: none; transition: transform 0.2s; }
+    .draggable:active { cursor: grabbing; transform: scale(1.1); }
+    
+    .drop-zone { 
+        border: 3px dashed #94a3b8; background-color: #f8fafc; 
+        transition: all .3s ease; border-radius: 0.75rem; 
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold; color: #334155;
+    }
+    .drop-zone.drag-over { border-color: #3b82f6; background-color: #dbeafe; transform: scale(1.05); }
+    .drop-zone-filled { border-style: solid; border-color: #4ade80; background-color: #f0fdf4; color: #15803d; }
+
+    /* Item Jadual (Activity 1 & 2) */
+    .schedule-row {
+        border: 2px solid #e2e8f0; border-radius: 0.75rem; padding: 10px 15px;
+        transition: all 0.2s; background: white;
+        cursor: pointer; text-align: left;
+    }
+    .schedule-row:hover { transform: translateX(5px); border-color: #3b82f6; }
+    
+    .highlight-row { 
+        background-color: #fef9c3 !important; /* Yellow-100 */
+        border-color: #eab308 !important; /* Yellow-500 */
         transform: scale(1.02);
-    } 
-    .date-cell:not(.date-empty):hover { background-color: #f0f9ff; }
-    .date-cell.special { background-color: #fefce8; font-bold: true; }
-    .date-cell.today { background-color: #bfdbfe; border: 2px solid #3b82f6; }
-    .date-cell.semalam { background-color: #f1f5f9; border: 2px solid #94a3b8; }
-    .date-cell.esok { background-color: #ecfdf5; border: 2px solid #22c55e; }
+    }
+
+    /* Kalendar Cell */
+    .date-cell {
+        border: 2px solid #cbd5e1; border-radius: 0.5rem;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        cursor: pointer; transition: all 0.2s; background: white; min-height: 60px;
+    }
+    .date-cell:hover { transform: scale(1.05); border-color: #3b82f6; z-index: 10; }
+    .date-cell.empty { background: transparent; border: none; cursor: default; }
+    .date-cell.special { background-color: #fefce8; border-color: #facc15; }
+    
+    /* Mesin Masa States */
+    .date-cell.today { background-color: #dbeafe; border-color: #3b82f6; color: #1e3a8a; }
+    .date-cell.semalam { background-color: #f1f5f9; border-color: #64748b; color: #475569; opacity: 0.7; }
+    .date-cell.esok { background-color: #dcfce7; border-color: #22c55e; color: #14532d; }
+
+    /* Cards */
+    .time-card {
+        background: white; border: 2px solid #94a3b8; border-radius: 0.75rem;
+        padding: 1rem; font-weight: bold; cursor: pointer;
+        box-shadow: 4px 4px 0 rgba(0,0,0,0.1); transition: transform 0.1s;
+    }
+    .time-card:active { transform: translateY(4px); box-shadow: none; }
+
   </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-full">
+<body class="min-h-screen text-slate-800 pb-10">
 
-  <div class="bg-yellow-100 border-b-4 border-yellow-300 p-4 shadow-sm sticky top-0 z-10">
-    <div class="max-w-6xl mx-auto flex items-center justify-between">
+  <div class="fixed top-4 left-0 right-0 z-50 px-4 pointer-events-none">
+    <div class="max-w-4xl mx-auto bg-green-400 border-4 border-green-600 rounded-full px-6 py-3 shadow-xl flex items-center justify-between pointer-events-auto transform hover:scale-[1.01] transition-transform">
       <div class="flex items-center gap-3">
-        <span class="text-2xl">📚</span>
-        <span id="info-text" class="text-lg font-semibold text-gray-800">
-          Pilih aktiviti untuk mula belajar masa dan kalendar!
-        </span>
+        <span class="text-3xl animate-bounce">🗓️</span>
+        <span id="info-text" class="text-xl font-bold text-green-900 leading-none mt-1">Pilih aktiviti untuk mula!</span>
       </div>
-      <button id="speak-btn"
-              class="bg-yellow-300 hover:bg-yellow-400 text-yellow-800 font-bold py-2 px-4 rounded-full text-xl transition-colors duration-200"
-              onclick="speakInfo()">
-        🔊
-      </button>
+      <button id="speak-btn" onclick="speakInfo()" class="bg-white hover:bg-green-50 text-green-600 border-2 border-green-200 rounded-full p-2 transition-colors shadow-sm">🔊</button>
     </div>
   </div>
+  <div class="h-24"></div>
 
-  <div class="max-w-6xl mx-auto p-6">
-    <div class="bg-white rounded-xl shadow-lg p-6 mb-6 activity-card flex items-center justify-center">
-      <div id="activity-content" class="text-center w-full"> 
-        <div class="py-16">
-          <div class="text-6xl mb-4">🗓️⏰</div>
-          <h2 class="text-3xl font-bold text-gray-800 mb-4">
-            Kemahiran Pemulihan: Masa dan Kalendar
-          </h2>
-          <p class="text-xl text-gray-600 mb-8">
-            Pilih aktiviti di bawah untuk meneroka jadual harian dan kalendar.
-          </p>
-          <div class="text-4xl">👇</div>
+  <div class="max-w-6xl mx-auto p-4">
+    
+    <div class="game-card p-8 mb-8">
+        <div id="activity-content" class="w-full relative z-10 flex flex-col items-center justify-center h-full transition-opacity duration-200">
+            <div class="py-10 text-center">
+                <div class="text-8xl mb-6 animate-pulse">⏰</div>
+                <h2 class="text-5xl font-bold text-emerald-600 mb-4">Masa & Kalendar</h2>
+                <p class="text-2xl text-slate-500 mb-8 font-semibold">Belajar Jadual, Jam & Hari.</p>
+                <div class="text-4xl animate-bounce">👇</div>
+            </div>
         </div>
-      </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow-lg p-6">
-      <h3 class="text-2xl font-bold text-gray-800 mb-4 text-center">Pilih Aktiviti</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <button onclick="loadActivity(1)"
-                class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-200">
-          🤔 Pukul Berapa?
-        </button>
-        <button onclick="loadActivity(2)"
-                class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-200">
-          📋 Cari Aktiviti
-        </button>
-        <button onclick="loadActivity(3)"
-                class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-200">
-          🕒 Padanan Jam
-        </button>
-        <button onclick="loadActivity(4)"
-                class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-200">
-          🗓️ Detektif Kalendar
-        </button>
-        <button onclick="loadActivity(5)"
-                class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors duration-200">
-          ⏪ Mesin Masa ⏩
-        </button>
+    <div class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg p-6 border-2 border-white">
+      <h3 class="text-2xl font-bold text-slate-700 mb-4 text-center">🎮 Pilih Aktiviti</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+        <button onclick="loadActivity(1)" class="btn-3d bg-blue-500 text-white font-bold py-4 px-2 rounded-xl text-lg">🤔 Pukul Berapa?</button>
+        <button onclick="loadActivity(2)" class="btn-3d bg-green-500 text-white font-bold py-4 px-2 rounded-xl text-lg">📋 Cari Aktiviti</button>
+        <button onclick="loadActivity(3)" class="btn-3d bg-purple-500 text-white font-bold py-4 px-2 rounded-xl text-lg">🕒 Padanan Jam</button>
+        <button onclick="loadActivity(4)" class="btn-3d bg-orange-500 text-white font-bold py-4 px-2 rounded-xl text-lg">🗓️ Kalendar</button>
+        <button onclick="loadActivity(5)" class="btn-3d bg-red-500 text-white font-bold py-4 px-2 rounded-xl text-lg">⏪ Mesin Masa</button>
       </div>
 
-      <div class="flex justify-center gap-4">
-        <button onclick="clearActivity()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg text-lg transition-colors duration-200">
-          🧹 Bersih
-        </button>
-        <button onclick="nextActivity()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg text-lg transition-colors duration-200">
-          ➡️ Seterusnya
-        </button>
+      <div class="flex justify-center gap-4 border-t-2 border-slate-100 pt-6">
+        <button onclick="clearActivity()" class="btn-3d bg-slate-400 text-white font-bold py-2 px-6 rounded-full text-lg">🏠 Menu</button>
+        <button onclick="nextActivity()" class="btn-3d bg-indigo-500 text-white font-bold py-2 px-8 rounded-full text-xl">Seterusnya ➡️</button>
       </div>
     </div>
   </div>
 
   <script>
+    /* --- STANDARD HELPERS --- */
     let currentActivity = 0;
     let ttsEnabled = false;
-    let currentInfo = "Pilih aktiviti untuk mula belajar masa dan kalendar!";
-    let draggedElement = null; // Masih digunakan oleh Aktiviti 3
-
-    // State untuk aktiviti
-    window.mesinMasaState = { today: 15, current: 15 };
+    let currentInfo = "Pilih aktiviti untuk mula belajar masa!";
+    let draggedElement = null;
     
-    // === DATA JADUAL INDUK (Digunakan oleh Aktiviti 1 & 2) ===
+    // Data Master
     const masterSchedule = [
-      { time: "8:00 - 8:30 PG", activity: "Perhimpunan" },
-      { time: "8:30 - 9:30 PG", activity: "Matematik" },
-      { time: "9:30 - 10:00 PG", activity: "Rehat" },
-      { time: "10:00 - 11:00 PG", activity: "Sains" },
-      { time: "11:00 - 11:30 PG", activity: "Bahasa Melayu" },
-      { time: "11:30 - 12:00 PTG", activity: "Pendidikan Seni" },
-      { time: "12:00 - 12:30 PTG", activity: "Pendidikan Jasmani" },
-      { time: "12:30 - 1:00 PTG", activity: "Kemas Kelas & Pulang" }
+      { time: "8:00 PG", activity: "Perhimpunan" },
+      { time: "8:30 PG", activity: "Matematik" },
+      { time: "9:30 PG", activity: "Rehat" },
+      { time: "10:00 PG", activity: "Sains" },
+      { time: "11:00 PG", activity: "B. Melayu" },
+      { time: "11:30 PG", activity: "P. Seni" },
+      { time: "12:00 PTG", activity: "P. Jasmani" },
+      { time: "12:30 PTG", activity: "Pulang" }
     ];
-    let currentScheduleIndex = 0;
-    // === AKHIR DATA ===
+    let mesinMasaState = { today: 15 };
 
-    /* ====== TTS ====== */
-    function speak(text) {
-      if (!ttsEnabled) return;
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      setTimeout(() => {
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ms-MY';
-        u.rate = 0.9; u.pitch = 1.05;
-        const voices = window.speechSynthesis.getVoices();
-        const ms = voices.find(v => v.lang === 'ms-MY' || v.lang?.startsWith('ms'));
-        if (ms) u.voice = ms;
-        window.speechSynthesis.speak(u);
-      }, 100);
+    function triggerWin() { confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } }); }
+
+    function speak(text) { 
+        if (!ttsEnabled || !('speechSynthesis' in window)) return; 
+        window.speechSynthesis.cancel(); 
+        const u = new SpeechSynthesisUtterance(text); u.lang = 'ms-MY'; u.rate = 0.95; u.pitch = 1.05; 
+        const ms = window.speechSynthesis.getVoices().find(v => v.lang === 'ms-MY' || v.lang?.startsWith('ms')); 
+        if (ms) u.voice = ms; 
+        window.speechSynthesis.speak(u); 
     }
-    function setInfo(text) { currentInfo = text; document.getElementById('info-text').textContent = text; }
-    function speakInfo() {
-      if (!ttsEnabled) {
-        ttsEnabled = true;
-        const btn = document.getElementById('speak-btn');
-        btn.classList.add('bg-green-300', 'hover:bg-green-400');
-        btn.classList.remove('bg-yellow-300', 'hover:bg-yellow-400');
-      }
-      speak(currentInfo);
+    
+    function setInfo(text) { 
+        currentInfo = text; const infoEl = document.getElementById('info-text'); 
+        infoEl.style.opacity = 0; setTimeout(() => { infoEl.textContent = text; infoEl.style.opacity = 1; }, 200); 
+    }
+    
+    function speakInfo() { 
+        if (!ttsEnabled) { ttsEnabled = true; document.getElementById('speak-btn').classList.add('bg-green-100', 'text-green-600'); } 
+        speak(currentInfo); 
     }
 
-    /* ====== DnD helpers (Untuk Aktiviti 3) ====== */
-    function dragStart(e) { draggedElement = e.target; e.target.classList.add('dragging'); }
-    function dragEnd(e) { e.target.classList.remove('dragging'); document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drag-over')); }
-    function allowDrop(e) { e.preventDefault(); if (e.currentTarget.classList.contains('drop-zone')) e.currentTarget.classList.add('drag-over'); }
-    function dragLeave(e) { if (e.currentTarget.classList.contains('drop-zone')) e.currentTarget.classList.remove('drag-over'); }
+    /* --- DRAG & DROP HELPERS --- */
+    window.dragStart = function(e) { draggedElement = e.target; e.target.classList.add('opacity-50'); }
+    window.dragEnd = function(e) { if(e.target) e.target.classList.remove('opacity-50'); document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drag-over')); }
+    window.allowDrop = function(e) { e.preventDefault(); if (e.currentTarget.classList.contains('drop-zone')) e.currentTarget.classList.add('drag-over'); }
+    window.dragLeave = function(e) { if (e.currentTarget.classList.contains('drop-zone')) e.currentTarget.classList.remove('drag-over'); }
 
-    /* ====== Router (Aktiviti 1 dikemas kini) ====== */
+    /* --- ROUTER --- */
     function loadActivity(n) {
       currentActivity = n;
       const content = document.getElementById('activity-content');
-      if (n === 1) return loadWhatActivity(content); // <-- FUNGSI BAHARU
-      if (n === 2) return loadCariAktiviti(content);
-      if (n === 3) return loadPadananJam(content);
-      if (n === 4) return loadDetektifKalendar(content);
-      if (n === 5) return loadMesinMasa(content);
+      content.style.opacity = 0;
+      setTimeout(() => {
+          if (n === 1) loadWhatActivity(content);
+          if (n === 2) loadCariAktiviti(content);
+          if (n === 3) loadPadananJam(content);
+          if (n === 4) loadDetektifKalendar(content);
+          if (n === 5) loadMesinMasa(content);
+          content.style.opacity = 1;
+      }, 200);
     }
 
-    /* ====== FUNGSI AKTIVITI 1 DIKEMAS KINI ====== */
+    function clearActivity() {
+        currentActivity = 0;
+        document.getElementById('activity-content').innerHTML = `<div class="py-10 text-center"><div class="text-8xl mb-6 animate-pulse">⏰</div><h2 class="text-5xl font-bold text-emerald-600 mb-4">Masa & Kalendar</h2><p class="text-2xl text-slate-500 mb-8 font-semibold">Pilih butang di bawah.</p></div>`;
+        setInfo("Pilih aktiviti untuk mula belajar!");
+    }
+    function nextActivity() { let next = currentActivity + 1; if (next > 5) next = 1; loadActivity(next); }
+
+
+    /* =========================================
+       LOGIK AKTIVITI (MASA & KALENDAR)
+       ========================================= */
+
+    /* 1. Pukul Berapa? (Aktiviti Saya) */
     function loadWhatActivity(content) {
-      setInfo("Klik kad masa di bawah. Lihat apa aktiviti kamu pada masa itu!");
-
-      // Kad masa dan aktiviti sepadan
-      const timeCards = [
-        { time: "8:15 PG", activity: "Perhimpunan" },
-        { time: "9:00 PG", activity: "Matematik" },
-        { time: "9:45 PG", activity: "Rehat" },
-        { time: "10:30 PG", activity: "Sains" },
-        { time: "11:45 PG", activity: "Pendidikan Seni" },
-        { time: "12:45 PTG", activity: "Kemas Kelas & Pulang" }
-      ];
-      
-      content.innerHTML = `
-        <h3 class="text-2xl font-bold text-blue-600 mb-6">🤔 Aktiviti Saya Pukul Berapa?</h3>
+        setInfo("Klik kad masa untuk lihat aktiviti.");
         
-        <div class="w-full md:w-3/4 mx-auto max-h-[300px] overflow-y-auto p-2 mb-6">
-          <h4 class="text-lg font-semibold mb-2 text-left">Jadual Harian:</h4>
-          <div id="schedule-list-display" class="space-y-2">
-            ${masterSchedule.map(item => `
-              <div class="schedule-item-display border-2 p-3 rounded-lg text-left text-lg"
-                   data-activity-display="${item.activity}">
-                <strong>${item.time}:</strong> ${item.activity}
-              </div>
-            `).join('')}
-          </div>
-        </div>
+        // Create subset of times for buttons
+        const timeCards = [...masterSchedule].sort(()=>0.5-Math.random()).slice(0, 5);
 
-        <div>
-          <h4 class="text-lg font-semibold mb-3">Klik Kad Masa:</h4>
-          <div class="flex flex-wrap justify-center gap-4">
-            ${timeCards.sort(() => Math.random() - 0.5).map(card => `
-              <button class="number-card bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl p-4 text-center"
-                      onclick="checkWhatActivity('${card.time}', '${card.activity}')">
-                <div class="text-2xl font-bold text-blue-800">${card.time}</div>
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      `;
+        content.innerHTML = `
+            <div class="w-full max-w-5xl flex flex-col md:flex-row gap-8 h-full">
+                <div class="w-full md:w-1/2 bg-blue-50 border-2 border-blue-200 rounded-3xl p-6 flex flex-col h-[400px]">
+                    <h4 class="text-blue-800 font-bold mb-4 text-xl">Jadual Hari Ini</h4>
+                    <div class="overflow-y-auto space-y-3 pr-2 custom-scroll" id="schedule-list">
+                         ${masterSchedule.map(item => `
+                            <div class="schedule-row" data-act="${item.activity}">
+                                <span class="font-bold text-blue-600 w-20 inline-block">${item.time}</span>
+                                <span>${item.activity}</span>
+                            </div>
+                         `).join('')}
+                    </div>
+                </div>
+
+                <div class="w-full md:w-1/2 flex flex-col justify-center">
+                    <h4 class="text-slate-600 font-bold mb-4 text-center text-xl">Pilih Masa</h4>
+                    <div class="flex flex-wrap justify-center gap-4">
+                        ${timeCards.map(t => `
+                            <div class="time-card bg-white hover:bg-blue-100 border-blue-300 text-blue-900 text-xl"
+                                 onclick="checkWhatActivity('${t.time}', '${t.activity}')">
+                                ${t.time}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
-    function checkWhatActivity(timeStr, correctActivity) {
-      // 1. Bersihkan semua highlight
-      document.querySelectorAll('.schedule-item-display').forEach(el => {
-        el.classList.remove('highlight', 'border-yellow-400', 'bg-yellow-100', 'scale-102');
-      });
+    function checkWhatActivity(timeStr, act) {
+        // Reset Highlight
+        document.querySelectorAll('.schedule-row').forEach(el => el.classList.remove('highlight-row'));
+        
+        // Find & Highlight
+        const list = document.getElementById('schedule-list');
+        const target = Array.from(list.children).find(el => el.dataset.act === act);
+        
+        if (target) {
+            target.classList.add('highlight-row');
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
 
-      // 2. Cari baris yang sepadan
-      const scheduleList = document.getElementById('schedule-list-display');
-      const targetRow = scheduleList.querySelector(`[data-activity-display="${correctActivity}"]`);
-
-      // 3. Highlight baris itu
-      if (targetRow) {
-        targetRow.classList.add('highlight', 'border-yellow-400', 'bg-yellow-100', 'scale-102');
-        // Skrol ke baris itu jika ia di luar pandangan
-        targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-
-      // 4. Kemas kini info
-      const msg = `Pada pukul ${timeStr}, kamu sedang... ${correctActivity}!`;
-      setInfo(msg);
-      speak(msg);
+        const msg = `Pukul ${timeStr}, aktiviti ialah ${act}.`;
+        setInfo(msg); speak(msg);
     }
-    /* ====== AKHIR FUNGSI AKTIVITI 1 ====== */
 
-
-    /* ====== FUNGSI AKTIVITI 2 (Kekal) ====== */
+    /* 2. Cari Aktiviti */
     function loadCariAktiviti(content) {
-      currentScheduleIndex = Math.floor(Math.random() * masterSchedule.length);
-      const question = masterSchedule[currentScheduleIndex];
-      
-      setInfo(`Cari aktiviti ini: ${question.activity}. Sila klik pada baris yang betul.`);
-      
-      content.innerHTML = `
-        <h3 class="text-2xl font-bold text-green-600 mb-6">📋 Jom Cari Aktiviti!</h3>
-        
-        <div class="bg-green-50 p-4 rounded-lg text-center mb-6">
-          <p class="text-lg text-gray-700">Arahan:</p>
-          <p id="jadual-prompt" class="text-3xl font-bold text-green-800">
-            Sila klik pada baris untuk: <strong>${question.activity}</strong>
-          </p>
-        </div>
+        const target = masterSchedule[Math.floor(Math.random() * masterSchedule.length)];
+        setInfo(`Cari aktiviti: ${target.activity}`);
 
-        <div class="w-full md:w-3/4 mx-auto max-h-[400px] overflow-y-auto p-2">
-          <h4 class="text-lg font-semibold mb-2 text-left">Jadual Harian:</h4>
-          <div id="jadual-list" class="space-y-2">
-            ${masterSchedule.map(item => `
-              <div class="schedule-item schedule-item-clickable border-2 p-4 rounded-lg text-left text-xl"
-                   data-activity="${item.activity}"
-                   onclick="checkJadualClick(event, '${question.activity}', '${item.time}')">
-                <strong>${item.time}:</strong> ${item.activity}
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        
-        <div id="jadual-feedback" class="mt-4 text-xl font-semibold min-h-8 text-center"></div>
-      `;
-      
-      speak(currentInfo); // Sebut arahan
+        content.innerHTML = `
+            <div class="w-full max-w-4xl text-center">
+                <h3 class="text-3xl font-bold text-green-600 mb-4">🔍 Cari Aktiviti</h3>
+                
+                <div class="bg-green-100 border-2 border-green-300 rounded-2xl p-6 mb-6 inline-block">
+                    <div class="text-slate-600 font-bold mb-1">Sila cari:</div>
+                    <div class="text-3xl font-black text-green-800">${target.activity}</div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-left max-h-[350px] overflow-y-auto p-2">
+                    ${masterSchedule.map(item => `
+                        <div class="schedule-row border-green-200 hover:bg-green-50" 
+                             onclick="checkCari(this, '${target.activity}', '${item.activity}', '${item.time}')">
+                            <span class="font-bold text-slate-500 w-24 inline-block">${item.time}</span>
+                            <span class="font-bold text-slate-800">${item.activity}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
-    function checkJadualClick(e, correctActivity, correctTime) {
-      const clickedRow = e.currentTarget;
-      const clickedActivity = clickedRow.dataset.activity;
-      const feedback = document.getElementById('jadual-feedback');
-      
-      document.querySelectorAll('.schedule-item').forEach(el => el.classList.remove('shake'));
-      
-      if (clickedActivity === correctActivity) {
-        feedback.textContent = `Betul! ${correctActivity} pada ${correctTime}.`;
-        feedback.className = "mt-4 text-xl font-semibold text-center text-green-600";
-        setInfo(feedback.textContent); speak(feedback.textContent);
+    function checkCari(el, target, current, time) {
+        if (target === current) {
+            el.classList.add('highlight-row', 'bg-green-200');
+            speak(`Betul! ${current} pada pukul ${time}.`);
+            triggerWin();
+            setTimeout(() => loadActivity(2), 2000);
+        } else {
+            el.classList.add('shake', 'bg-red-100');
+            speak("Salah. Cuba lagi.");
+            setTimeout(() => el.classList.remove('shake', 'bg-red-100'), 500);
+        }
+    }
+
+    /* 3. Padanan Jam */
+    function loadPadananJam(content) {
+        setInfo("Seret jam ke masa yang betul.");
+        const pairs = [
+            { icon: "🕘", time: "9:00" },
+            { icon: "🕒", time: "3:00" },
+            { icon: "🕕", time: "6:00" }
+        ];
+        const shuffled = [...pairs].sort(()=>Math.random()-0.5);
+
+        content.innerHTML = `
+            <div class="w-full max-w-4xl">
+                <h3 class="text-3xl font-bold text-purple-600 mb-8 text-center">🕒 Padanan Jam</h3>
+                
+                <div class="flex justify-center gap-6 mb-12">
+                    ${shuffled.map(p => `
+                        <div class="text-8xl cursor-grab hover:scale-110 transition-transform draggable bg-purple-50 rounded-full p-2 border-4 border-purple-200"
+                             draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" data-ans="${p.time}">
+                            ${p.icon}
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="flex flex-wrap justify-center gap-8">
+                    ${pairs.map(p => `
+                        <div class="bg-white border-2 border-purple-200 rounded-2xl p-4 w-40 text-center">
+                            <div class="text-3xl font-black text-purple-900 mb-4">${p.time}</div>
+                            <div class="drop-zone h-32 w-full rounded-xl bg-purple-50"
+                                 ondrop="dropJam(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" data-ans="${p.time}">
+                                 <span class="text-purple-300 text-sm">Letak Sini</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function dropJam(e) {
+        e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+        if (!draggedElement) return;
         
-        clickedRow.classList.add('border-green-400', 'bg-green-100');
+        const dragAns = draggedElement.dataset.ans;
+        const boxAns = e.currentTarget.dataset.ans;
+
+        if (dragAns === boxAns) {
+            e.currentTarget.innerHTML = draggedElement.innerHTML;
+            e.currentTarget.classList.add('drop-zone-filled');
+            draggedElement.remove();
+            speak("Pandai!");
+            if(!document.querySelector('.draggable')) { triggerWin(); speak("Tahniah! Semua jam betul."); }
+        } else {
+            speak("Salah jam tu.");
+            e.currentTarget.classList.add('shake');
+            setTimeout(() => e.currentTarget.classList.remove('shake'), 500);
+        }
+    }
+
+    /* 4. Detektif Kalendar */
+    function loadDetektifKalendar(content) {
+        setInfo("Klik tarikh Ogos untuk lihat peristiwa.");
+        const days = ["A","I","S","R","K","J","S"];
+        // Generate simple calendar structure
+        let datesHtml = "";
+        // Empty slots for start of month
+        for(let i=0; i<4; i++) datesHtml += `<div class="date-cell empty"></div>`;
+        // Dates 1-31
+        const events = { 1: "Mula Bulan", 15: "Hari Jadi", 31: "Merdeka" };
         
-        document.querySelectorAll('#jadual-list .schedule-item').forEach(el => {
-          el.onclick = null;
-          el.classList.remove('cursor-pointer', 'schedule-item-clickable');
-          if (el !== clickedRow) el.classList.add('opacity-50');
+        for(let i=1; i<=31; i++) {
+            const evt = events[i] ? 'special' : '';
+            const label = events[i] ? `<div class="text-[10px] text-orange-600 font-bold truncate w-full text-center">${events[i]}</div>` : '';
+            datesHtml += `
+                <div class="date-cell ${evt}" onclick="clickDate(${i}, '${events[i]||''}')">
+                    <span class="text-lg font-bold">${i}</span>
+                    ${label}
+                </div>`;
+        }
+
+        content.innerHTML = `
+            <div class="w-full max-w-2xl">
+                <div class="bg-orange-100 border-2 border-orange-300 rounded-t-2xl p-4 text-center">
+                    <h3 class="text-2xl font-black text-orange-700 uppercase tracking-widest">Ogos</h3>
+                </div>
+                <div class="bg-white border-2 border-t-0 border-orange-200 rounded-b-2xl p-4 shadow-sm">
+                    <div class="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-slate-400">
+                        ${days.map(d=>`<div>${d}</div>`).join('')}
+                    </div>
+                    <div class="grid grid-cols-7 gap-2">
+                        ${datesHtml}
+                    </div>
+                </div>
+                <div id="cal-info" class="mt-6 text-center text-xl font-bold text-orange-600 h-8"></div>
+            </div>
+        `;
+    }
+
+    function clickDate(date, evt) {
+        const msg = evt ? `Tarikh ${date} Ogos: ${evt}!` : `${date} Ogos. Tiada apa-apa.`;
+        document.getElementById('cal-info').textContent = msg;
+        speak(msg);
+    }
+
+    /* 5. Mesin Masa */
+    function loadMesinMasa(content) {
+        setInfo("Hari ini 15hb. Tekan butang bawah.");
+        mesinMasaState.today = 15;
+        const dates = [13, 14, 15, 16, 17];
+
+        content.innerHTML = `
+            <div class="w-full max-w-4xl text-center">
+                <h3 class="text-3xl font-bold text-red-600 mb-8">⏪ Mesin Masa ⏩</h3>
+
+                <div class="flex justify-center gap-3 md:gap-6 mb-10" id="date-row">
+                    ${dates.map(d => `
+                        <div id="d-${d}" class="date-cell w-16 h-24 md:w-24 md:h-32 text-2xl md:text-4xl font-black text-slate-400 ${d===15?'today':''}">
+                            ${d}
+                            <div class="text-xs md:text-sm font-normal mt-2 text-slate-400 label-text">${d===15?'Hari Ini':''}</div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="flex flex-wrap justify-center gap-4">
+                    <button onclick="timeTravel('semalam')" class="btn-3d bg-slate-400 text-white py-3 px-6 rounded-xl font-bold text-lg">◀ Semalam</button>
+                    <button onclick="timeTravel('hariini')" class="btn-3d bg-blue-500 text-white py-3 px-6 rounded-xl font-bold text-lg">Hari Ini</button>
+                    <button onclick="timeTravel('esok')" class="btn-3d bg-green-500 text-white py-3 px-6 rounded-xl font-bold text-lg">Esok ▶</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function timeTravel(type) {
+        // Reset Visuals
+        document.querySelectorAll('.date-cell').forEach(el => {
+            el.className = "date-cell w-16 h-24 md:w-24 md:h-32 text-2xl md:text-4xl font-black text-slate-400";
+            el.querySelector('.label-text').textContent = "";
         });
 
-      } else {
-        feedback.textContent = `Itu ${clickedActivity}. Cuba cari ${correctActivity}.`;
-        feedback.className = "mt-4 text-xl font-semibold text-center text-red-600";
-        setInfo(feedback.textContent); speak(feedback.textContent);
-        
-        clickedRow.classList.add('shake');
-        setTimeout(() => clickedRow.classList.remove('shake'), 500);
-      }
-    }
-    /* ====== AKHIR FUNGSI AKTIVITI 2 ====== */
+        let target = 15;
+        let msg = "Hari ini 15 haribulan.";
+        let cls = "today";
+        let label = "Hari Ini";
 
+        if (type === 'semalam') { target = 14; msg = "Semalam ialah 14 haribulan."; cls = "semalam"; label="Semalam"; }
+        if (type === 'esok') { target = 16; msg = "Esok ialah 16 haribulan."; cls = "esok"; label="Esok"; }
 
-    /* ====== Aktiviti 3: Padanan Jam (Kekal) ====== */
-    function loadPadananJam(content) {
-      setInfo("Padankan jam analog dengan masa digital. Seret jam ke kotak yang betul.");
-      
-      const times = [
-        { emoji: "🕘", correct: "9:00" },
-        { emoji: "🕒", correct: "3:00" },
-        { emoji: "🕕", correct: "6:00" }
-      ];
-      const shuffledTimes = [...times].sort(() => Math.random() - 0.5);
-      
-      content.innerHTML = `
-        <h3 class="text-2xl font-bold text-purple-600 mb-6">🕒 Padanan Jam</h3>
-        <div class="flex flex-col md:flex-row gap-6 justify-around">
-          
-          <div class="w-full md:w-1/3">
-            <h4 class="text-lg font-semibold mb-2">Pilih Jam:</h4>
-            <div id="jam-choices" class="flex flex-col gap-4">
-              ${shuffledTimes.map(time => `
-                <div class="activity-item text-7xl bg-purple-100 border-2 border-purple-300 rounded-lg p-4 text-center cursor-move"
-                     draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" data-correct="${time.correct}">
-                  ${time.emoji}
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <div class="w-full md:w-1/2">
-            <h4 class="text-lg font-semibold mb-2">Slot Masa:</h4>
-            <div class="space-y-3">
-              ${times.map(time => `
-                <div class="flex items-center gap-2">
-                  <span class="font-bold text-2xl w-24">${time.correct}</span>
-                  <div class="drop-zone w-full p-8 rounded-lg" 
-                       ondrop="dropOnJam(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" 
-                       data-correct="${time.correct}">...</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function dropOnJam(e) {
-      e.preventDefault();
-      e.currentTarget.classList.remove('drag-over');
-      if (!draggedElement) return;
-      
-      const draggedCorrect = draggedElement.dataset.correct;
-      const dropCorrect = e.currentTarget.dataset.correct;
-      
-      if (draggedCorrect === dropCorrect) {
-        e.currentTarget.innerHTML = draggedElement.innerHTML; // Pindahkan emoji
-        e.currentTarget.classList.add('drop-zone-filled', 'text-7xl');
-        e.currentTarget.classList.remove('drop-zone');
-        e.currentTarget.removeAttribute('ondrop');
-        draggedElement.remove(); draggedElement = null;
-        
-        const msg = `Betul! Jam ${draggedCorrect} dipadankan.`;
-        setInfo(msg); speak(msg);
-        
-        if (document.querySelectorAll('#activity-content .drop-zone').length === 0) {
-          setInfo("Syabas! Semua jam dipadankan!"); speak("Syabas! Semua jam dipadankan!");
+        const el = document.getElementById(`d-${target}`);
+        if(el) {
+            el.classList.add(cls);
+            el.querySelector('.label-text').textContent = label;
         }
-      } else {
-        setInfo(`Bukan jam itu. Cuba lagi.`); speak(`Bukan jam itu. Cuba lagi.`);
-        e.currentTarget.classList.add('shake');
-        setTimeout(() => e.currentTarget.classList.remove('shake'), 500);
-      }
+        speak(msg);
     }
 
-
-    /* ====== Aktiviti 4: Detektif Kalendar (Kekal) ====== */
-    function loadDetektifKalendar(content) {
-      setInfo("Jom jadi detektif! Klik mana-mana tarikh dalam kalendar Ogos.");
-      const days = ["A", "I", "S", "R", "K", "J", "S"];
-      const dates = [
-        ...Array(4).fill(null), // Kosong sebelum 1hb
-        ...Array(31).fill(0).map((_, i) => i + 1), // 1-31
-        ...Array(7).fill(null) // Kosong selepas 31hb
-      ].slice(0, 35);
-      
-      const events = {
-        1: "Hari Pertama Ogos",
-        15: "Hari Jadi Ali",
-        31: "Hari Merdeka!"
-      };
-      
-      content.innerHTML = `
-        <h3 class="text-2xl font-bold text-orange-600 mb-4">🗓️ Detektif Kalendar</h3>
-        <p class="text-xl text-gray-700 mb-4">Bulan Ogos</p>
-        
-        <div class="grid grid-cols-7 gap-1 bg-white p-2 rounded-lg shadow">
-          ${days.map(d => `<div class="font-bold text-center p-2 text-gray-500">${d}</div>`).join('')}
-          ${dates.map(date => {
-            if (!date) return `<div class="date-cell date-empty p-2 h-16"></div>`;
-            const event = events[date];
-            return `
-              <div class="date-cell border rounded-lg p-2 h-16 ${event ? 'special bg-yellow-50' : ''}"
-                   onclick="clickKalendar(${date}, '${event || ''}')">
-                <span class="font-bold">${date}</span>
-                ${event ? `<div class="text-xs text-orange-700">${event.split(' ')[0]}...</div>` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-        
-        <div id="kalendar-info" class="mt-4 p-4 bg-orange-50 rounded-lg text-center text-lg font-semibold text-orange-800 min-h-16">
-          Klik pada tarikh untuk lihat maklumat.
-        </div>
-      `;
-    }
-    
-    function clickKalendar(date, event) {
-      const infoBox = document.getElementById('kalendar-info');
-      let msg;
-      if (event) {
-        msg = `Tarikh ${date} Ogos. Ada peristiwa: ${event}!`;
-      } else {
-        msg = `Tarikh ${date} Ogos. Tiada peristiwa istimewa.`;
-      }
-      infoBox.textContent = msg;
-      setInfo(msg); speak(msg);
-    }
-
-    /* ====== Aktiviti 5: Mesin Masa (Kekal) ====== */
-    function loadMesinMasa(content) {
-      setInfo("Hari ini 15 November. Klik butang 'Semalam' atau 'Esok'!");
-      window.mesinMasaState = { today: 15, current: 15 }; // Reset
-      
-      const dates = Array(5).fill(0).map((_, i) => 13 + i); // 13, 14, 15, 16, 17
-      
-      content.innerHTML = `
-        <h3 class="text-2xl font-bold text-red-600 mb-6">⏪ Mesin Masa ⏩</h3>
-        <p class="text-lg mb-4">Lihat kalendar mini ini. Hari ini ialah 15hb.</p>
-        
-        <div id="mesin-kalendar" class="flex justify-center gap-2 mb-6">
-          ${dates.map(d => `
-            <div id="date-${d}" class="date-cell border-2 p-6 rounded-lg text-3xl font-bold ${d === 15 ? 'today' : ''}" data-date="${d}">
-              ${d}
-            </div>
-          `).join('')}
-        </div>
-        
-        <div class="flex justify-center gap-4">
-          <button onclick="showDate('semalam')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg">Semalam</button>
-          <button onclick="showDate('hari-ini')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg text-lg">Hari Ini</button>
-          <button onclick="showDate('esok')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg">Esok</button>
-        </div>
-      `;
-    }
-    
-    function showDate(type) {
-      const { today } = window.mesinMasaState;
-      let targetDate;
-      let msg;
-      let newClass;
-      
-      if (type === 'semalam') {
-        targetDate = today - 1;
-        msg = `Semalam ialah 14 November.`;
-        newClass = 'semalam';
-      } else if (type === 'esok') {
-        targetDate = today + 1;
-        msg = `Esok ialah 16 November.`;
-        newClass = 'esok';
-      } else { // 'hari-ini'
-        targetDate = today;
-        msg = `Hari ini ialah 15 November.`;
-        newClass = 'today';
-      }
-      
-      document.querySelectorAll('#mesin-kalendar .date-cell').forEach(el => {
-        el.classList.remove('today', 'semalam', 'esok');
-      });
-      
-      const el = document.getElementById(`date-${targetDate}`);
-      if (el) {
-        el.classList.add(newClass);
-      }
-      
-      setInfo(msg); speak(msg);
-    }
-
-    /* ====== Kawalan Umum ====== */
-    function clearActivity() {
-      currentActivity = 0;
-      document.getElementById('activity-content').innerHTML = `
-        <div class="text-center py-16">
-          <div class="text-6xl mb-4">🗓️⏰</div>
-          <h2 class="text-3xl font-bold text-gray-800 mb-4">Kemahiran Pemulihan: Masa dan Kalendar</h2>
-          <p class="text-xl text-gray-600 mb-8">Pilih aktiviti di bawah untuk meneroka jadual harian dan kalendar.</p>
-          <div class="text-4xl">👇</div>
-        </div>
-      `;
-      setInfo("Pilih aktiviti untuk mula belajar masa dan kalendar!");
-    }
-    
-    function nextActivity() {
-      if (currentActivity === 0) return loadActivity(1);
-      if (currentActivity < 5) return loadActivity(currentActivity + 1);
-      return loadActivity(1);
-    }
-
-    // Kekalkan TTS resume
-    if ('speechSynthesis' in window) {
-      setInterval(() => { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); }, 1000);
-    }
   </script>
 </body>
 </html>
